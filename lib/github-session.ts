@@ -22,6 +22,9 @@ export type GitDriveSession = {
   refreshTokenExpiresAt?: number;
   githubUser?: GitHubUser;
   storageRepo?: SelectedStorageRepo;
+  appClientId?: string;
+  appClientSecret?: string;
+  appSlug?: string;
 };
 
 const SESSION_COOKIE = "gitdrive_session";
@@ -36,13 +39,13 @@ export async function getGitDriveSession() {
   return getIronSession<GitDriveSession>(await cookies(), {
     cookieName: SESSION_COOKIE,
     password,
-    ttl: 60 * 60 * 24 * 7,
+    ttl: 60 * 60 * 24 * 180,
     cookieOptions: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7
+      maxAge: 60 * 60 * 24 * 180
     }
   });
 }
@@ -54,12 +57,16 @@ export async function getValidGitHubAccessToken(session: Awaited<ReturnType<type
   if (!expiresAt || expiresAt > Date.now() + 60_000) return session.accessToken;
 
   if (!session.refreshToken) {
-    session.destroy();
+    session.accessToken = undefined;
+    session.accessTokenExpiresAt = undefined;
+    session.githubUser = undefined;
+    session.storageRepo = undefined;
+    await session.save();
     return null;
   }
 
-  const clientId = process.env.GITHUB_APP_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
+  const clientId = session.appClientId ?? process.env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = session.appClientSecret ?? process.env.GITHUB_APP_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
   const body = new URLSearchParams({
@@ -90,7 +97,13 @@ export async function getValidGitHubAccessToken(session: Awaited<ReturnType<type
   };
 
   if (!data.access_token) {
-    session.destroy();
+    session.accessToken = undefined;
+    session.refreshToken = undefined;
+    session.accessTokenExpiresAt = undefined;
+    session.refreshTokenExpiresAt = undefined;
+    session.githubUser = undefined;
+    session.storageRepo = undefined;
+    await session.save();
     return null;
   }
 
