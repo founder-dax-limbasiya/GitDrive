@@ -11,7 +11,13 @@ export async function POST(request: Request) {
 
   try {
     const session = await getGitDriveSession();
-    session.destroy();
+    session.accessToken = undefined;
+    session.refreshToken = undefined;
+    session.accessTokenExpiresAt = undefined;
+    session.refreshTokenExpiresAt = undefined;
+    session.githubUser = undefined;
+    session.storageRepo = undefined;
+    await session.save();
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Session is not configured." }, { status: 503 });
