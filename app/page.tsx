@@ -275,7 +275,10 @@ export default function HomePage() {
                     <button onClick={saveStorageRepo} disabled={!selectedRepo || savingRepo} className="h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{savingRepo ? "Saving..." : githubStatus.storageRepo ? "Change repository" : "Use this repository"}</button>
                   </div>
                 ) : (
-                  <p className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">No private writable repositories were returned. Create a private repository such as GitDrive-Storage, then install your GitHub App on that repository with Contents read and write permission.</p>
+                  <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+                    <p>No private writable repositories were returned. Create the dedicated private storage repository, then install your GitHub App on it.</p>
+                    <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="https://github.com/new?name=GitDrive-Storage&visibility=private" target="_blank" rel="noreferrer">Create GitDrive-Storage on GitHub</a>
+                  </div>
                 )}
                 {githubStatus.storageRepo && <p className="mt-3 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Selected: {githubStatus.storageRepo.fullName}</p>}
               </section>
