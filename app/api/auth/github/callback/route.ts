@@ -29,9 +29,15 @@ export async function GET(request: Request) {
     return clearOAuthCookies(returnToApp(request, "invalid_state"));
   }
 
-  const clientId = process.env.GITHUB_APP_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
   const redirectUri = process.env.GITHUB_APP_REDIRECT_URI;
+  let session;
+  try {
+    session = await getGitDriveSession();
+  } catch {
+    return clearOAuthCookies(returnToApp(request, "not_configured"));
+  }
+  const clientId = session.appClientId ?? process.env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = session.appClientSecret ?? process.env.GITHUB_APP_CLIENT_SECRET;
   if (!clientId || !clientSecret || !redirectUri) {
     return clearOAuthCookies(returnToApp(request, "not_configured"));
   }
@@ -68,8 +74,6 @@ export async function GET(request: Request) {
     if (!userResponse.ok) return clearOAuthCookies(returnToApp(request, "profile_failed"));
 
     const user = (await userResponse.json()) as { login: string; avatar_url: string; name: string | null };
-    const session = await getGitDriveSession();
-
     session.accessToken = tokenData.access_token;
     session.refreshToken = tokenData.refresh_token;
     session.accessTokenExpiresAt = tokenData.expires_in ? Date.now() + tokenData.expires_in * 1000 : undefined;
