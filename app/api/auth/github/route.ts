@@ -1,13 +1,21 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { getGitDriveSession } from "@/lib/github-session";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const clientId = process.env.GITHUB_APP_CLIENT_ID;
+  let session;
+  try {
+    session = await getGitDriveSession();
+  } catch {
+    return NextResponse.redirect(new URL("/?auth=not_configured", request.url));
+  }
+
+  const clientId = session.appClientId ?? process.env.GITHUB_APP_CLIENT_ID;
   const redirectUri = process.env.GITHUB_APP_REDIRECT_URI;
 
-  if (!clientId || !redirectUri || !process.env.GITDRIVE_SESSION_PASSWORD) {
+  if (!clientId || !redirectUri) {
     return NextResponse.redirect(new URL("/?auth=not_configured", request.url));
   }
 
