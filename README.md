@@ -7,8 +7,9 @@ A mobile-first personal cloud-drive interface with GitHub as the planned storage
 The first deployed version includes:
 - Responsive drive dashboard
 - Local file-picker and drag/drop preview (not remote upload)
-- GitHub App authorization-code flow with PKCE and state validation
-- Encrypted, HttpOnly session cookie; GitHub access tokens are not returned to browser JavaScript
+- Guided GitHub App registration using GitHub's App Manifest flow
+- GitHub authorization-code flow with PKCE and state validation
+- Encrypted, HttpOnly browser session; GitHub app credentials and user tokens are not exposed to browser JavaScript
 - Access-token refresh support
 - Private, writable repository discovery and storage-repository validation
 
@@ -22,34 +23,30 @@ The first deployed version includes:
 - iron-session
 - GitHub REST API
 
-## Run locally
+## GitHub setup
 
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-```
+Open the deployed app and choose **Set up GitHub**. GitDrive prepares the GitHub App registration form with the minimum permissions it currently needs:
+- Contents: read/write
+- Metadata: read-only
+- No webhooks or event subscriptions
 
-## GitHub App setup
+The guided flow creates a private GitHub App owned by the person setting up the personal beta. GitHub generates its Client ID and Client Secret, which are stored in the encrypted, HttpOnly session cookie for this browser. That means this is currently a personal single-owner setup; it is not yet the shared multi-user SaaS credential architecture.
 
-Create a GitHub App at https://github.com/settings/apps/new.
+After GitHub creates the app:
+1. Install it on your GitHub account.
+2. Select only a separate private repository for storage.
+3. GitHub returns you to GitDrive to authorize the app.
+4. Choose the private repository in the GitDrive dashboard.
 
-Configure:
-- Homepage URL: `https://gitdrive-omega.vercel.app`
-- User authorization callback URL: `https://gitdrive-omega.vercel.app/api/auth/github/callback`
-- Repository permission: **Contents — Read and write**
-- Metadata permission: **Read-only** (required/default)
-- Webhooks: not needed for the current milestone
+Create a dedicated private repository such as `GitDrive-Storage` before installing the app. Do not use the public GitDrive source repository to store personal files, and do not select unrelated private repositories.
 
-For private storage, create a separate private repository (for example, `GitDrive-Storage`) and install the GitHub App with access only to that repository. Do not use the public GitDrive source repository to store personal files.
+## Environment
 
-Add these values to Vercel project environment variables for Production, Preview and Development:
-- `GITHUB_APP_CLIENT_ID`
-- `GITHUB_APP_CLIENT_SECRET`
-- `GITHUB_APP_REDIRECT_URI` (already configured in this Vercel project)
-- `GITDRIVE_SESSION_PASSWORD` (already configured as a secret in this Vercel project)
+Set these in Vercel:
+- `GITHUB_APP_REDIRECT_URI=https://gitdrive-omega.vercel.app/api/auth/github/callback`
+- `GITDRIVE_SESSION_PASSWORD` — random secret with at least 32 characters
 
-Never paste the Client Secret or session password into source code or commit them to GitHub.
+The production Vercel project already has these two variables configured. For local development, copy `.env.example` to `.env.local` and use your own random session password.
 
 ## Product principles
 
@@ -62,11 +59,12 @@ Never paste the Client Secret or session password into source code or commit the
 
 ## Next milestones
 
-1. Finish GitHub App setup and validate a real connection.
+1. Finish a real GitHub App install and authorization test.
 2. Implement client-side encryption, chunking, retry and file manifests.
 3. Upload encrypted chunks as private GitHub Release assets.
 4. Implement verified download and reassembly.
 5. Add safe sharing and supported-format streaming after access-control and quota behaviour are tested.
+6. Move App credentials into a secure server-side multi-user store before opening the product to public users.
 
 ## Important
 
