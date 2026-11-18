@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 type GitHubStatus = {
+  appConfigured: boolean;
   connected: boolean;
   user: { login: string; avatarUrl: string; name: string | null } | null;
   storageRepo: { id: number; fullName: string; name: string; owner: string; defaultBranch: string } | null;
@@ -66,6 +67,7 @@ export default function HomePage() {
   const [notice, setNotice] = useState("GitHub connection is not configured yet. Your files stay on this device in this preview.");
   const [selected, setSelected] = useState<string | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
+    appConfigured: false,
     connected: false,
     user: null,
     storageRepo: null
@@ -108,19 +110,32 @@ export default function HomePage() {
 
     loadConnection();
 
-    const authResult = new URLSearchParams(window.location.search).get("auth");
+    const params = new URLSearchParams(window.location.search);
+    const authResult = params.get("auth");
+    const setupResult = params.get("setup");
     const authMessages: Record<string, string> = {
       connected: "GitHub connected. Now choose a private repository for your files.",
-      not_configured: "GitHub App setup is still needed. Add the four environment variables listed in .env.example to Vercel.",
+      not_configured: "GitHub App setup is needed. Choose Set up GitHub to start the guided setup.",
       denied: "GitHub authorization was cancelled.",
       invalid_state: "The security check expired. Please connect GitHub again.",
-      token_failed: "GitHub did not issue an access token. Check the GitHub App settings and try again.",
+      token_failed: "GitHub did not issue an access token. Please retry the GitHub connection.",
       profile_failed: "GitHub authorized the app, but the profile could not be loaded.",
-      callback_failed: "GitHub connection could not be completed. Check the Vercel function logs.",
+      callback_failed: "GitHub connection could not be completed. Please try again.",
       failed: "GitHub connection failed. Please try again."
     };
-    if (authResult) {
-      setNotice(authMessages[authResult] ?? "GitHub connection returned an unexpected result.");
+    const setupMessages: Record<string, string> = {
+      cancelled: "GitHub App setup was cancelled.",
+      invalid_state: "The GitHub App setup security check expired. Start setup again.",
+      conversion_failed: "GitHub could not finish creating the app. Please start setup again.",
+      incomplete_app: "GitHub returned incomplete app details. Please try setup again.",
+      app_missing: "GitHub App setup is not complete yet. Please start setup again."
+    };
+    if (authResult || setupResult) {
+      setNotice(
+        (authResult && authMessages[authResult]) ||
+        (setupResult && setupMessages[setupResult]) ||
+        "GitHub setup returned an unexpected result."
+      );
       window.history.replaceState({}, "", window.location.pathname);
     }
 
@@ -167,7 +182,7 @@ export default function HomePage() {
   async function disconnectGitHub() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      setGithubStatus({ connected: false, user: null, storageRepo: null });
+      setGithubStatus((current) => ({ ...current, connected: false, user: null, storageRepo: null }));
       setRepositories([]);
       setSelectedRepo("");
       setNotice("GitHub has been disconnected from this browser session.");
@@ -214,8 +229,10 @@ export default function HomePage() {
                   <span className="hidden max-w-[150px] truncate rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 sm:inline-flex">Connected · {githubStatus.user?.login}</span>
                   <button onClick={disconnectGitHub} className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Disconnect</button>
                 </>
-              ) : (
+              ) : githubStatus.appConfigured ? (
                 <a href="/api/auth/github" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Connect GitHub</a>
+              ) : (
+                <a href="/api/github-app/register" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Set up GitHub</a>
               )}
               <button aria-label="Settings" className="hidden h-10 w-10 place-items-center rounded-xl border border-line text-slate-500 sm:grid"><Settings2 className="h-4 w-4" /></button>
             </div>
