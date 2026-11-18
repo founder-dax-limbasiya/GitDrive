@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     redirect_url: `${origin}/api/github-app/callback`,
     callback_urls: [`${origin}/api/auth/github/callback`],
     setup_url: `${origin}/api/github-app/installed`,
-    public: true,
+    public: false,
     default_permissions: {
       contents: "write",
       metadata: "read"
