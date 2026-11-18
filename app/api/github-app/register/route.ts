@@ -54,7 +54,9 @@ export async function GET(request: Request) {
 <body>
   <main>
     <h1>Set up GitDrive</h1>
-    <p>GitDrive will ask GitHub to create its app with only two permissions: read repository metadata and read/write repository contents. You will review and approve the app on GitHub.</p>
+    <p>First create a separate private repository for your files. Give it the name <strong>GitDrive-Storage</strong>, keep it private, and leave it empty.</p>
+    <p><a href="https://github.com/new?name=GitDrive-Storage&visibility=private" target="_blank" rel="noopener noreferrer">Create the private storage repository</a></p>
+    <p>Then continue. GitDrive will ask GitHub to create its app with only two permissions: read repository metadata and read/write repository contents.</p>
     <form method="post" action="https://github.com/settings/apps/new?state=${safeState}">
       <textarea name="manifest" hidden>${manifestValue}</textarea>
       <button type="submit">Continue to GitHub</button>
