@@ -1,11 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive, ArrowDownToLine, Check, ChevronDown, Cloud, File, FileImage,
   FileText, Film, Folder, HardDrive, Home, Link2, LockKeyhole, MoreHorizontal,
   Plus, Search, Settings2, ShieldCheck, Upload, X
 } from "lucide-react";
+
+type GitHubStatus = {
+  connected: boolean;
+  user: { login: string; avatarUrl: string; name: string | null } | null;
+  storageRepo: { id: number; fullName: string; name: string; owner: string; defaultBranch: string } | null;
+};
+
+type RepoOption = {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  defaultBranch: string;
+};
 
 type DriveFile = {
   id: string;
@@ -51,12 +65,67 @@ export default function HomePage() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("GitHub connection is not configured yet. Your files stay on this device in this preview.");
   const [selected, setSelected] = useState<string | null>(null);
+  const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
+    connected: false,
+    user: null,
+    storageRepo: null
+  });
+  const [repositories, setRepositories] = useState<RepoOption[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState("");
+  const [savingRepo, setSavingRepo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const visibleFiles = useMemo(
     () => files.filter((file) => file.name.toLowerCase().includes(query.toLowerCase())),
     [files, query]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConnection() {
+      try {
+        const statusResponse = await fetch("/api/auth/session", { cache: "no-store" });
+        const status = (await statusResponse.json()) as GitHubStatus;
+        if (cancelled) return;
+        setGithubStatus(status);
+
+        if (status.connected) {
+          const repoResponse = await fetch("/api/github/repositories", { cache: "no-store" });
+          const repoData = (await repoResponse.json()) as { repositories?: RepoOption[]; error?: string };
+          if (cancelled) return;
+          if (repoResponse.ok && repoData.repositories) {
+            setRepositories(repoData.repositories);
+            setSelectedRepo(status.storageRepo?.fullName ?? repoData.repositories[0]?.fullName ?? "");
+          } else if (repoData.error) {
+            setNotice(repoData.error);
+          }
+        }
+      } catch {
+        if (!cancelled) setNotice("Could not check GitHub connection. Refresh the page to try again.");
+      }
+    }
+
+    loadConnection();
+
+    const authResult = new URLSearchParams(window.location.search).get("auth");
+    const authMessages: Record<string, string> = {
+      connected: "GitHub connected. Now choose a private repository for your files.",
+      not_configured: "GitHub App setup is still needed. Add the four environment variables listed in .env.example to Vercel.",
+      denied: "GitHub authorization was cancelled.",
+      invalid_state: "The security check expired. Please connect GitHub again.",
+      token_failed: "GitHub did not issue an access token. Check the GitHub App settings and try again.",
+      profile_failed: "GitHub authorized the app, but the profile could not be loaded.",
+      callback_failed: "GitHub connection could not be completed. Check the Vercel function logs.",
+      failed: "GitHub connection failed. Please try again."
+    };
+    if (authResult) {
+      setNotice(authMessages[authResult] ?? "GitHub connection returned an unexpected result.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    return () => { cancelled = true; };
+  }, []);
 
   function addFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
@@ -69,7 +138,42 @@ export default function HomePage() {
       source: "local" as const
     }));
     setFiles((current) => [...added, ...current]);
-    setNotice(added.length + " file(s) added to this local preview. GitHub upload will be enabled after secure account connection is built.");
+    setNotice(added.length + " file(s) added to this local preview. These files have not been uploaded to GitHub.");
+  }
+
+  async function saveStorageRepo() {
+    if (!selectedRepo) return;
+    setSavingRepo(true);
+    try {
+      const response = await fetch("/api/github/storage-repo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fullName: selectedRepo })
+      });
+      const data = await response.json() as { storageRepo?: GitHubStatus["storageRepo"]; error?: string };
+      if (!response.ok || !data.storageRepo) {
+        setNotice(data.error ?? "Could not select this storage repository.");
+        return;
+      }
+      setGithubStatus((current) => ({ ...current, storageRepo: data.storageRepo ?? null }));
+      setNotice("Private storage repository linked: " + data.storageRepo.fullName + ". File upload is the next build step.");
+    } catch {
+      setNotice("Could not save the storage repository. Please try again.");
+    } finally {
+      setSavingRepo(false);
+    }
+  }
+
+  async function disconnectGitHub() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setGithubStatus({ connected: false, user: null, storageRepo: null });
+      setRepositories([]);
+      setSelectedRepo("");
+      setNotice("GitHub has been disconnected from this browser session.");
+    } catch {
+      setNotice("Could not disconnect GitHub. Please try again.");
+    }
   }
 
   return (
@@ -105,8 +209,14 @@ export default function HomePage() {
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your files..." className="h-10 w-full rounded-xl border border-line bg-slate-50 pl-10 pr-4 text-sm outline-none transition focus:border-indigo-300 focus:bg-white" />
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 sm:inline-flex">Preview mode</span>
-              <button onClick={() => setNotice("GitHub OAuth setup is the next milestone. No account has been connected yet.")} className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Connect GitHub</button>
+              {githubStatus.connected ? (
+                <>
+                  <span className="hidden max-w-[150px] truncate rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 sm:inline-flex">Connected · {githubStatus.user?.login}</span>
+                  <button onClick={disconnectGitHub} className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Disconnect</button>
+                </>
+              ) : (
+                <a href="/api/auth/github" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Connect GitHub</a>
+              )}
               <button aria-label="Settings" className="hidden h-10 w-10 place-items-center rounded-xl border border-line text-slate-500 sm:grid"><Settings2 className="h-4 w-4" /></button>
             </div>
           </header>
@@ -121,7 +231,7 @@ export default function HomePage() {
             <div className="mb-6 grid gap-4 md:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl bg-gradient-to-br from-[#292a72] via-[#4546b9] to-[#7778f2] p-6 text-white shadow-soft md:p-7">
                 <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-indigo-100">Storage overview</p><p className="mt-3 text-3xl font-bold tracking-tight">Ready for your files</p><p className="mt-2 max-w-sm text-sm leading-6 text-indigo-100">Connect GitHub to set up your private storage space. No storage quota is being claimed in this preview.</p></div><span className="rounded-2xl bg-white/15 p-3"><HardDrive className="h-6 w-6" /></span></div>
-                <div className="mt-7 flex items-center justify-between border-t border-white/20 pt-4 text-xs text-indigo-100"><span>GitHub storage</span><span>Not connected</span></div>
+                <div className="mt-7 flex items-center justify-between border-t border-white/20 pt-4 text-xs text-indigo-100"><span>GitHub storage</span><span>{githubStatus.storageRepo?.fullName ?? (githubStatus.connected ? "Choose a private repo" : "Not connected")}</span></div>
               </div>
               <div className="rounded-2xl border border-line bg-white p-6 shadow-soft">
                 <div className="flex items-center justify-between"><span className="text-sm font-semibold text-ink">Security status</span><LockKeyhole className="h-5 w-5 text-emerald-600" /></div>
@@ -130,6 +240,29 @@ export default function HomePage() {
                 <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Security-first setup</div>
               </div>
             </div>
+
+            {githubStatus.connected && (
+              <section className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-soft md:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">Private storage repository</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">Choose a private repository that your GitHub App can write to. The public GitDrive source repository is not used for personal files.</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">GitHub connected</span>
+                </div>
+                {repositories.length > 0 ? (
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <select value={selectedRepo} onChange={(e) => setSelectedRepo(e.target.value)} className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-indigo-300">
+                      {repositories.map((repo) => <option key={repo.id} value={repo.fullName}>{repo.fullName}</option>)}
+                    </select>
+                    <button onClick={saveStorageRepo} disabled={!selectedRepo || savingRepo} className="h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{savingRepo ? "Saving..." : githubStatus.storageRepo ? "Change repository" : "Use this repository"}</button>
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">No private writable repositories were returned. Create a private repository such as GitDrive-Storage, then install your GitHub App on that repository with Contents read and write permission.</p>
+                )}
+                {githubStatus.storageRepo && <p className="mt-3 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Selected: {githubStatus.storageRepo.fullName}</p>}
+              </section>
+            )}
 
             <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
               <div className="flex items-start gap-2"><Cloud className="mt-0.5 h-4 w-4 shrink-0" /><p>{notice}</p><button onClick={() => setNotice("")} aria-label="Dismiss notice" className="ml-auto text-indigo-500"><X className="h-4 w-4" /></button></div>
