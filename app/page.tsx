@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, ArrowDownToLine, Check, ChevronDown, ChevronRight, Cloud,
-  CloudUpload, Clock3, FileImage, FileText, Film, Folder, FolderOpen,
-  HardDrive, Home, Image as ImageIcon, LayoutGrid, Link2, List, LockKeyhole,
-  LogIn, MoreHorizontal, Plus, Search, Settings, Settings2, ShieldCheck,
-  SlidersHorizontal, Upload, Users, X
+  Archive, ArrowDownToLine, Check, ChevronRight, Cloud, CloudUpload,
+  FileImage, FileText, Film, FolderOpen, HardDrive, Home, Image as ImageIcon,
+  LayoutGrid, Link2, List, LockKeyhole, LogIn, Plus, Search, Settings,
+  ShieldCheck, SlidersHorizontal, Users, X
 } from "lucide-react";
 
 type GitHubStatus = {
@@ -54,12 +53,7 @@ type DriveFile = {
   source: "sample" | "local" | "remote";
 };
 
-const initialFiles: DriveFile[] = [
-  { id: "1", name: "Product-demo-final.mp4", type: "video", size: "248 MB", modified: "Today, 10:42 AM", source: "sample" },
-  { id: "2", name: "Brand-assets.zip", type: "archive", size: "84 MB", modified: "Yesterday", source: "sample" },
-  { id: "3", name: "Invoice-November.pdf", type: "document", size: "1.8 MB", modified: "Nov 15, 2026", source: "sample" },
-  { id: "4", name: "Launch-cover.png", type: "image", size: "6.2 MB", modified: "Nov 13, 2026", source: "sample" }
-];
+
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return bytes + " B";
@@ -133,7 +127,6 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [sortBy, setSortBy] = useState<"recent" | "name" | "size">("recent");
   const [notice, setNotice] = useState("Connect GitHub and select a private repository to start using encrypted storage.");
-  const [selected, setSelected] = useState<string | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
     appConfigured: false,
     connected: false,
