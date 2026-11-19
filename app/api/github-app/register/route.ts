@@ -54,14 +54,13 @@ export async function GET(request: Request) {
 <body>
   <main>
     <h1>Set up GitDrive</h1>
-    <p>First create a separate private repository for your files. Give it the name <strong>GitDrive-Storage</strong>, keep it private, and leave it empty.</p>
-    <p><a href="https://github.com/new?name=GitDrive-Storage&visibility=private" target="_blank" rel="noopener noreferrer">Create the private storage repository</a></p>
-    <p>Then continue. GitDrive will ask GitHub to create its app with only two permissions: read repository metadata and read/write repository contents.</p>
+    <p>GitDrive can use a private repository you already own. No new repository is required. Continue to GitHub, create the app, and during installation choose <strong>Only select repositories</strong> and select the existing private repository you want to use for storage.</p>
+    <p>GitDrive requests only two permissions: read repository metadata and read/write repository contents. The public GitDrive source repository should not be used for personal files.</p>
     <form method="post" action="https://github.com/settings/apps/new?state=${safeState}">
       <textarea name="manifest" hidden>${manifestValue}</textarea>
       <button type="submit">Continue to GitHub</button>
     </form>
-    <p class="small">GitDrive will only access repositories you choose during installation. We recommend selecting only a separate private repository for storage.</p>
+    <p class="small">You can choose an existing private repository. Select only the one intended for GitDrive storage.</p>
   </main>
 </body>
 </html>`;
