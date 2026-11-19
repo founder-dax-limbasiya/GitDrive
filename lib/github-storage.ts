@@ -119,7 +119,7 @@ export async function uploadStorageAsset(
   if (!releaseResponse.ok) throw new Error("Could not verify the GitHub storage release.");
   const release = await releaseResponse.json() as { upload_url?: string };
   if (!release.upload_url) throw new Error("GitHub did not provide a release asset upload URL.");
-  const uploadUrl = new URL(release.upload_url.replace(/\\{[^}]+\\}$/, ""));
+  const uploadUrl = new URL(release.upload_url.replace(/\{[^}]+\}$/, ""));
   uploadUrl.searchParams.set("name", name);
 
   const response = await fetch(uploadUrl, {
