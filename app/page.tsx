@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, ArrowDownToLine, Check, ChevronDown, Cloud, FileImage,
-  FileText, Film, Folder, HardDrive, Home, Link2, LockKeyhole, MoreHorizontal,
-  Plus, Search, Settings2, ShieldCheck, Upload, X
+  Archive, ArrowDownToLine, Check, ChevronDown, ChevronRight, Cloud,
+  CloudUpload, Clock3, FileImage, FileText, Film, Folder, FolderOpen,
+  HardDrive, Home, Image as ImageIcon, LayoutGrid, Link2, List, LockKeyhole,
+  LogIn, MoreHorizontal, Plus, Search, Settings, Settings2, ShieldCheck,
+  SlidersHorizontal, Upload, Users, X
 } from "lucide-react";
 
 type GitHubStatus = {
@@ -124,8 +126,12 @@ function FileGlyph({ type }: { type: DriveFile["type"] }) {
 }
 
 export default function HomePage() {
-  const [files] = useState(initialFiles);
+  const [files] = useState<DriveFile[]>([]);
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"home" | "files" | "shared" | "settings">("home");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "image" | "video" | "document" | "archive">("all");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [sortBy, setSortBy] = useState<"recent" | "name" | "size">("recent");
   const [notice, setNotice] = useState("Connect GitHub and select a private repository to start using encrypted storage.");
   const [selected, setSelected] = useState<string | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
@@ -158,6 +164,22 @@ export default function HomePage() {
       : files;
     return source.filter((file) => file.name.toLowerCase().includes(query.toLowerCase()));
   }, [files, query, remoteFiles, storageUnlocked]);
+
+  const displayFiles = useMemo(() => {
+    const filtered = visibleFiles.filter((file) =>
+      categoryFilter === "all" || file.type === categoryFilter
+    );
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "size") return parseFloat(b.size) - parseFloat(a.size);
+      return b.modified.localeCompare(a.modified);
+    });
+  }, [visibleFiles, categoryFilter, sortBy]);
+
+  const totalBytes = useMemo(
+    () => remoteFiles.reduce((total, file) => total + file.size, 0),
+    [remoteFiles]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -232,7 +254,9 @@ export default function HomePage() {
     setLoadingStorage(true);
     try {
       const response = await fetch("/api/storage/files", { cache: "no-store" });
-      const data = await response.json() as {
+      const data = await response.json().catch(() => {
+        throw new Error("GitDrive storage API returned an unexpected response. Please refresh the app and try again.");
+      }) as {
         files?: Array<Omit<StoredFile, "name" | "size" | "type" | "modified" | "chunkCount" | "chunkSize" | "volumeCount">>;
         error?: string
       };
@@ -481,164 +505,359 @@ export default function HomePage() {
     }
   }
 
-  return (
-    <main className="min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-[1500px]">
-        <aside className="hidden w-[248px] shrink-0 border-r border-line bg-white px-5 py-7 lg:flex lg:flex-col">
-          <a href="#" className="mb-10 flex items-center gap-3 px-2 no-underline">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand text-white"><Cloud className="h-5 w-5" /></span>
-            <span><span className="block text-lg font-bold tracking-tight text-ink">GitDrive</span><span className="text-xs text-muted">Your personal cloud</span></span>
-          </a>
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
-          <nav className="space-y-1">
-            <a className="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-brand"><Home className="h-4 w-4" /> My Drive</a>
-            <a className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600"><Folder className="h-4 w-4" /> Shared with me</a>
-            <a className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-600"><Archive className="h-4 w-4" /> Backups</a>
-          </nav>
-          <div className="mt-auto rounded-2xl border border-line bg-slate-50 p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Privacy first</div>
-            <p className="text-xs leading-5 text-muted">Files are encrypted in your browser before they leave this device.</p>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full w-[8%] rounded-full bg-brand" /></div>
-            <p className="mt-2 text-[11px] text-muted">Setup progress · 1 of 5</p>
-          </div>
-        </aside>
 
-        <section className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-line bg-white/90 px-4 backdrop-blur md:px-8">
-            <div className="flex items-center gap-3 lg:hidden">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-white"><Cloud className="h-5 w-5" /></span>
-              <span className="font-bold tracking-tight">GitDrive</span>
-            </div>
-            <div className="relative hidden w-full max-w-md md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your files..." className="h-10 w-full rounded-xl border border-line bg-slate-50 pl-10 pr-4 text-sm outline-none transition focus:border-indigo-300 focus:bg-white" />
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              {githubStatus.connected ? (
-                <>
-                  <span className="hidden max-w-[150px] truncate rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 sm:inline-flex">Connected · {githubStatus.user?.login}</span>
-                  <button onClick={disconnectGitHub} className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Disconnect</button>
-                </>
-              ) : githubStatus.appConfigured ? (
-                <a href="/api/auth/github" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Connect GitHub</a>
-              ) : (
-                <a href="/api/github-app/register" className="inline-flex h-10 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700"><Link2 className="h-4 w-4" /> Set up GitHub</a>
-              )}
-              <button aria-label="Settings" className="hidden h-10 w-10 place-items-center rounded-xl border border-line text-slate-500 sm:grid"><Settings2 className="h-4 w-4" /></button>
-            </div>
-          </header>
+  function setFilesCategory(category: "all" | "image" | "video" | "document" | "archive") {
+    setCategoryFilter(category);
+    setActiveTab("files");
+  }
 
-          <div className="mx-auto max-w-6xl px-4 py-7 md:px-8 md:py-10">
-            <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand">Your workspace</p><h1 className="text-3xl font-bold tracking-tight text-ink md:text-[34px]">My Drive</h1><p className="mt-2 text-sm text-muted">A simple home for all your files.</p></div>
-              <button onClick={() => inputRef.current?.click()} disabled={!githubStatus.storageRepo || !storageUnlocked || uploading} className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> {uploading ? "Uploading..." : "Add files"}</button>
-              <input ref={inputRef} type="file" className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ""; }} />
-            </div>
+  function formatDate(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+  }
 
-            <div className="mb-6 grid gap-4 md:grid-cols-[1.4fr_1fr]">
-              <div className="rounded-2xl bg-gradient-to-br from-[#292a72] via-[#4546b9] to-[#7778f2] p-6 text-white shadow-soft md:p-7">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-indigo-100">Storage overview</p><p className="mt-3 text-3xl font-bold tracking-tight">Ready for your files</p><p className="mt-2 max-w-sm text-sm leading-6 text-indigo-100">Your selected private repository stores encrypted file chunks. GitHub storage and bandwidth limits still apply.</p></div><span className="rounded-2xl bg-white/15 p-3"><HardDrive className="h-6 w-6" /></span></div>
-                <div className="mt-7 flex items-center justify-between border-t border-white/20 pt-4 text-xs text-indigo-100"><span>GitHub storage</span><span>{githubStatus.storageRepo?.fullName ?? (githubStatus.connected ? "Choose a private repo" : "Not connected")}</span></div>
-              </div>
-              <div className="rounded-2xl border border-line bg-white p-6 shadow-soft">
-                <div className="flex items-center justify-between"><span className="text-sm font-semibold text-ink">Security status</span><LockKeyhole className="h-5 w-5 text-emerald-600" /></div>
-                <p className="mt-5 text-2xl font-bold tracking-tight">AES-256-GCM enabled</p>
-                <p className="mt-2 text-sm leading-6 text-muted">Files are encrypted in your browser before upload. Your password is never sent to GitDrive.</p>
-                <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Security-first setup</div>
-              </div>
-            </div>
-
-            {githubStatus.connected && (
-              <section className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-soft md:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">Private storage repository</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">Choose a private repository that your GitHub App can write to. The public GitDrive source repository is not used for personal files.</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">GitHub connected</span>
-                </div>
-                {repositories.length > 0 ? (
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <select value={selectedRepo} onChange={(e) => setSelectedRepo(e.target.value)} className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-indigo-300">
-                      {repositories.map((repo) => <option key={repo.id} value={repo.fullName}>{repo.fullName}</option>)}
-                    </select>
-                    <button onClick={saveStorageRepo} disabled={!selectedRepo || savingRepo} className="h-11 rounded-xl bg-brand px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{savingRepo ? "Saving..." : githubStatus.storageRepo ? "Change repository" : "Use this repository"}</button>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                    <p>The GitDrive App does not yet have write access to a private repository. Open GitHub App installation settings and grant Contents read/write access to the existing private repository you want to use.</p>
-                    <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage GitHub App access</a>
-                  </div>
-                )}
-                {githubStatus.storageRepo && <p className="mt-3 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Selected: {githubStatus.storageRepo.fullName}</p>}
-              </section>
-            )}
-
-            {githubStatus.storageRepo && (
-              <section className="mb-6 rounded-2xl border border-line bg-white p-5 shadow-soft md:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">Encrypted storage</p>
-                    <p className="mt-1 text-xs leading-5 text-muted">Files are encrypted in your browser before being sent to private GitHub Release assets. Your password never leaves this device.</p>
-                  </div>
-                  <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-brand">{storageUnlocked ? "Unlocked" : "Locked"}</span>
-                </div>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={encryptionPassword}
-                    onChange={(e) => { setEncryptionPassword(e.target.value); setStorageUnlocked(false); setRemoteFiles([]); }}
-                    placeholder="Storage password (at least 10 characters)"
-                    className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-indigo-300"
-                  />
-                  <button onClick={unlockStorage} disabled={loadingStorage || encryptionPassword.length < 10} className="h-11 rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">{loadingStorage ? "Unlocking..." : "Unlock storage"}</button>
-                </div>
-                <p className="mt-3 text-[11px] leading-5 text-amber-700">Important: remember this password. It is not stored on GitDrive and cannot be reset to recover encrypted files.</p>
-                {uploading && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-muted"><span>Encrypting and uploading</span><span>{uploadProgress}%</span></div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand transition-all" style={{ width: `${uploadProgress}%` }} /></div>
-                  </div>
-                )}
-              </section>
-            )}
-
-            <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm text-indigo-900">
-              <div className="flex items-start gap-2"><Cloud className="mt-0.5 h-4 w-4 shrink-0" /><p>{notice}</p><button onClick={() => setNotice("")} aria-label="Dismiss notice" className="ml-auto text-indigo-500"><X className="h-4 w-4" /></button></div>
-            </div>
-
-            <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }} className="mb-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-indigo-200 bg-white px-5 py-8 text-center transition hover:border-brand hover:bg-indigo-50/30">
-              <span className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-indigo-50 text-brand"><Upload className="h-5 w-5" /></span>
-              <p className="text-sm font-semibold text-ink">{storageUnlocked ? "Drop files here to encrypt and upload" : "Unlock encrypted storage to add files"}</p>
-              <p className="mt-1 text-xs text-muted">or <button onClick={() => inputRef.current?.click()} disabled={!storageUnlocked || uploading} className="font-semibold text-brand underline underline-offset-2 disabled:opacity-40">browse from your device</button></p>
-              <p className="mt-3 text-[11px] text-slate-400">4 MiB encrypted chunks · automatic reassembly</p>
-            </div>
-
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div><h2 className="text-lg font-bold tracking-tight text-ink">Recent files</h2><p className="mt-1 text-xs text-muted">{visibleFiles.length} items shown · {storageUnlocked ? "private encrypted storage" : "sample preview until storage is unlocked"}</p></div>
-              <button className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-slate-600">Last modified <ChevronDown className="h-3.5 w-3.5" /></button>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-soft">
-              <div className="hidden grid-cols-[minmax(0,1fr)_110px_170px_40px] gap-4 border-b border-line bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 md:grid"><span>Name</span><span>File size</span><span>Last modified</span><span /></div>
-              {visibleFiles.length === 0 ? <div className="px-5 py-12 text-center text-sm text-muted">No matching files.</div> : visibleFiles.map((file) => (
-                <div key={file.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-4 py-4 last:border-0 md:grid-cols-[minmax(0,1fr)_110px_170px_40px] md:gap-4 md:px-5">
-                  <div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-50"><FileGlyph type={file.type} /></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink">{file.name}</p><p className="mt-1 text-[11px] text-muted">{file.source === "remote" ? "Encrypted · private GitHub storage" : file.source === "local" ? "Local preview" : "Sample file"}</p></div></div>
-                  <span className="text-xs text-slate-600">{file.size}</span><span className="hidden text-xs text-slate-500 md:block">{file.modified}</span>
-                  {file.source === "remote" ? (
-                    <button onClick={() => void downloadFile(file.id)} aria-label={"Download " + file.name} className="grid h-9 w-9 place-items-center rounded-lg text-brand hover:bg-indigo-50"><ArrowDownToLine className="h-4 w-4" /></button>
-                  ) : (
-                    <button onClick={() => setSelected(selected === file.id ? null : file.id)} aria-label={"More actions for " + file.name} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"><MoreHorizontal className="h-4 w-4" /></button>
-                  )}
-                  {selected === file.id && <div className="col-span-2 -mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 md:col-span-4">This row is a local or sample preview, not a remote file.</div>}
-                </div>
-              ))}
-            </div>
-            <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400"><span>GitDrive · Built for a calmer file workflow</span><span className="flex items-center gap-1"><Check className="h-3 w-3" /> Your local preview is working</span></footer>
-          </div>
-        </section>
+  function FileRow({ file, compact = false }: { file: DriveFile; compact?: boolean }) {
+    return (
+      <div key={file.id} className="flex min-w-0 items-center gap-3 rounded-2xl bg-white px-3 py-3 shadow-[0_2px_12px_rgba(20,24,40,0.035)] ring-1 ring-slate-100">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-50">
+          <FileGlyph type={file.type} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-semibold text-slate-900">{file.name}</p>
+          <p className="mt-1 text-[11px] text-slate-500">{file.size}{compact ? "" : " · " + formatDate(file.modified)}</p>
+        </div>
+        {file.source === "remote" && (
+          <button onClick={() => void downloadFile(file.id)} aria-label={"Download " + file.name} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-violet-600 hover:bg-violet-50">
+            <ArrowDownToLine className="h-4 w-4" />
+          </button>
+        )}
       </div>
-    </main>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
+      <div className="mx-auto min-h-screen max-w-5xl pb-32">
+        <header className="sticky top-0 z-30 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[15px] bg-[#6659e8] text-white shadow-sm">
+                <Cloud className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[17px] font-extrabold tracking-tight text-slate-950">GitDrive</p>
+                <p className="truncate text-[10px] font-medium text-slate-400">
+                  {githubStatus.storageRepo?.fullName ?? "Your private cloud"}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {githubStatus.connected ? (
+                <button onClick={() => setActiveTab("settings")} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-600" aria-label="Open settings">
+                  <Settings className="h-[18px] w-[18px]" />
+                </button>
+              ) : (
+                <a href={githubStatus.appConfigured ? "/api/auth/github" : "/api/github-app/register"} className="inline-flex h-10 items-center gap-2 rounded-full bg-[#17172a] px-4 text-xs font-bold text-white">
+                  <Link2 className="h-4 w-4" />
+                  Connect
+                </a>
+              )}
+              {githubStatus.connected && (
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-xs font-bold text-violet-700">
+                  {(githubStatus.user?.login ?? "G").slice(0, 1).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="px-4 pb-10 pt-5 sm:px-6">
+          {!githubStatus.connected ? (
+            <section className="mb-5 rounded-[26px] bg-white p-5 shadow-sm ring-1 ring-slate-100">
+              <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-violet-600">
+                <ShieldCheck className="h-4 w-4" /> Private by design
+              </div>
+              <h1 className="text-[25px] font-extrabold leading-tight tracking-tight">Your files, in one simple place.</h1>
+              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Connect GitHub and choose one of your existing private repositories to create your encrypted drive.</p>
+              <a href={githubStatus.appConfigured ? "/api/auth/github" : "/api/github-app/register"} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#17172a] text-sm font-bold text-white">
+                <LogIn className="h-4 w-4" /> {githubStatus.appConfigured ? "Connect GitHub" : "Set up GitHub"}
+              </a>
+            </section>
+          ) : !githubStatus.storageRepo ? (
+            <section className="mb-5 rounded-[26px] bg-white p-5 shadow-sm ring-1 ring-slate-100">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-violet-600">
+                <HardDrive className="h-4 w-4" /> Choose your storage
+              </div>
+              <h1 className="mt-2 text-xl font-extrabold tracking-tight">Select a private repository</h1>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Use an existing private repository. GitDrive will keep your encrypted file data there.</p>
+              {repositories.length > 0 ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  <select value={selectedRepo} onChange={(e) => setSelectedRepo(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-violet-300">
+                    {repositories.map((repo) => <option key={repo.id} value={repo.fullName}>{repo.fullName}</option>)}
+                  </select>
+                  <button onClick={saveStorageRepo} disabled={!selectedRepo || savingRepo} className="h-12 rounded-2xl bg-[#17172a] text-sm font-bold text-white disabled:opacity-50">
+                    {savingRepo ? "Saving..." : "Use this repository"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+                  The GitDrive App needs Contents read/write permission on your existing private repository.
+                  <a className="mt-2 block font-bold underline" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage GitHub App access</a>
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="mb-5 rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-violet-600">
+                    <LockKeyhole className="h-4 w-4" /> Encrypted storage
+                  </div>
+                  <p className="mt-1 truncate text-xs text-slate-500">{githubStatus.storageRepo.fullName}</p>
+                </div>
+                <span className={"rounded-full px-3 py-1.5 text-[10px] font-bold " + (storageUnlocked ? "bg-emerald-50 text-emerald-700" : "bg-violet-50 text-violet-700")}>
+                  {storageUnlocked ? "Unlocked" : "Locked"}
+                </span>
+              </div>
+              {!storageUnlocked ? (
+                <>
+                  <div className="mt-4 flex gap-2">
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={encryptionPassword}
+                      onChange={(e) => setEncryptionPassword(e.target.value)}
+                      placeholder="Enter your storage password"
+                      className="h-12 min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none focus:border-violet-300"
+                    />
+                    <button onClick={unlockStorage} disabled={loadingStorage || encryptionPassword.length < 10} className="h-12 shrink-0 rounded-2xl bg-[#17172a] px-4 text-xs font-bold text-white disabled:opacity-40">
+                      {loadingStorage ? "..." : "Unlock"}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] leading-4 text-amber-700">Keep this password safe. It cannot be reset to recover encrypted files.</p>
+                </>
+              ) : (
+                <div className="mt-3 flex items-center justify-between rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+                  <span className="flex items-center gap-2"><Check className="h-4 w-4" /> Storage unlocked</span>
+                  <button onClick={() => { setStorageUnlocked(false); setRemoteFiles([]); }} className="text-emerald-800 underline">Lock</button>
+                </div>
+              )}
+              {uploading && (
+                <div className="mt-4">
+                  <div className="flex justify-between text-[11px] text-slate-500"><span>Encrypting and uploading</span><span>{uploadProgress}%</span></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: uploadProgress + "%" }} /></div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {notice && (
+            <div className="mb-5 flex items-start gap-2 rounded-2xl bg-violet-50 px-3 py-3 text-xs leading-5 text-violet-900 ring-1 ring-violet-100">
+              <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="min-w-0 flex-1">{notice}</p>
+              <button onClick={() => setNotice("")} aria-label="Dismiss notice" className="shrink-0 text-violet-500"><X className="h-4 w-4" /></button>
+            </div>
+          )}
+
+          {activeTab === "home" && (
+            <>
+              <section className="mb-5">
+                <p className="text-xs font-semibold text-violet-600">YOUR PERSONAL DRIVE</p>
+                <h1 className="mt-1 text-[26px] font-extrabold leading-tight tracking-tight">
+                  Hello{githubStatus.user?.name ? ", " + githubStatus.user.name.split(" ")[0] : ""}
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">Everything you save, neatly together.</p>
+              </section>
+
+              <section className="mb-5 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#5b50d8] via-[#675ce9] to-[#8578f4] p-5 text-white shadow-[0_14px_35px_rgba(91,80,216,0.22)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-violet-100">Your private storage</p>
+                    <p className="mt-2 text-[28px] font-extrabold tracking-tight">{remoteFiles.length} files</p>
+                    <p className="mt-1 text-xs text-violet-100">{storageUnlocked ? formatSize(totalBytes) + " stored" : "Unlock your drive to see your files"}</p>
+                  </div>
+                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15"><HardDrive className="h-6 w-6" /></span>
+                </div>
+                <div className="mt-5 flex items-center justify-between border-t border-white/20 pt-3 text-[11px] text-violet-100">
+                  <span>{githubStatus.storageRepo?.fullName ?? "GitHub not connected"}</span>
+                  <button onClick={() => setActiveTab("settings")} className="flex items-center gap-1 font-bold text-white">Manage <ChevronRight className="h-3 w-3" /></button>
+                </div>
+              </section>
+
+              <section className="mb-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-[15px] font-extrabold">Quick access</h2>
+                  <button onClick={() => setActiveTab("files")} className="text-xs font-bold text-violet-600">See all</button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setFilesCategory("all")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-600"><FolderOpen className="h-5 w-5" /></span>
+                    <span><span className="block text-xs font-bold">All files</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.length} items</span></span>
+                  </button>
+                  <button onClick={() => setFilesCategory("image")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-600"><ImageIcon className="h-5 w-5" /></span>
+                    <span><span className="block text-xs font-bold">Images</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "image").length} items</span></span>
+                  </button>
+                  <button onClick={() => setFilesCategory("video")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-amber-600"><Film className="h-5 w-5" /></span>
+                    <span><span className="block text-xs font-bold">Videos</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "video").length} items</span></span>
+                  </button>
+                  <button onClick={() => setFilesCategory("document")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-50 text-sky-600"><FileText className="h-5 w-5" /></span>
+                    <span><span className="block text-xs font-bold">Documents</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "document").length} items</span></span>
+                  </button>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-3 flex items-center justify-between">
+                  <div><h2 className="text-[15px] font-extrabold">Recent files</h2><p className="mt-1 text-[10px] text-slate-400">Your latest uploads</p></div>
+                  <button onClick={() => setActiveTab("files")} className="text-xs font-bold text-violet-600">View all</button>
+                </div>
+                {storageUnlocked && displayFiles.length > 0 ? (
+                  <div className="space-y-2">{displayFiles.slice(0, 5).map((file) => <FileRow key={file.id} file={file} />)}</div>
+                ) : (
+                  <div className="rounded-[24px] bg-white px-5 py-8 text-center shadow-sm ring-1 ring-slate-100">
+                    <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-600"><FolderOpen className="h-6 w-6" /></span>
+                    <p className="mt-3 text-sm font-bold">{storageUnlocked ? "Your drive is empty" : "Your files will appear here"}</p>
+                    <p className="mx-auto mt-1 max-w-xs text-xs leading-5 text-slate-500">{storageUnlocked ? "Upload your first file to get started." : "Unlock encrypted storage to browse your private files."}</p>
+                    {storageUnlocked && <button onClick={() => inputRef.current?.click()} className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-[#17172a] px-4 text-xs font-bold text-white"><Plus className="h-4 w-4" /> Add your first file</button>}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+
+          {activeTab === "files" && (
+            <section>
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-violet-600">YOUR LIBRARY</p>
+                <div className="mt-1 flex items-end justify-between gap-2">
+                  <div><h1 className="text-[26px] font-extrabold tracking-tight">My files</h1><p className="mt-1 text-xs text-slate-500">{storageUnlocked ? displayFiles.length + " files" : "Unlock storage to browse files"}</p></div>
+                  <div className="flex items-center gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-100">
+                    <button onClick={() => setViewMode("list")} className={"grid h-9 w-9 place-items-center rounded-lg " + (viewMode === "list" ? "bg-violet-100 text-violet-700" : "text-slate-400")} aria-label="List view"><List className="h-4 w-4" /></button>
+                    <button onClick={() => setViewMode("grid")} className={"grid h-9 w-9 place-items-center rounded-lg " + (viewMode === "grid" ? "bg-violet-100 text-violet-700" : "text-slate-400")} aria-label="Grid view"><LayoutGrid className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-4 flex h-12 items-center gap-2 rounded-2xl bg-white px-4 shadow-sm ring-1 ring-slate-100">
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search files and folders" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
+                <SlidersHorizontal className="h-4 w-4 shrink-0 text-slate-400" />
+              </div>
+              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                {([
+                  ["all", "All"],
+                  ["image", "Images"],
+                  ["video", "Videos"],
+                  ["document", "Documents"],
+                  ["archive", "Archives"]
+                ] as const).map(([value, label]) => (
+                  <button key={value} onClick={() => setCategoryFilter(value)} className={"shrink-0 rounded-full px-4 py-2 text-xs font-bold " + (categoryFilter === value ? "bg-[#6659e8] text-white" : "bg-white text-slate-500 ring-1 ring-slate-100")}>{label}</button>
+                ))}
+              </div>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-500">{displayFiles.length} items</span>
+                <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-500">
+                  <ArrowDownToLine className="h-3.5 w-3.5" />
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "recent" | "name" | "size")} className="bg-transparent outline-none">
+                    <option value="recent">Recent first</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="size">Largest first</option>
+                  </select>
+                </label>
+              </div>
+              {!storageUnlocked ? (
+                <div className="rounded-[24px] bg-white px-5 py-9 text-center shadow-sm ring-1 ring-slate-100">
+                  <LockKeyhole className="mx-auto h-8 w-8 text-violet-500" />
+                  <p className="mt-3 text-sm font-bold">Storage is locked</p>
+                  <p className="mt-1 text-xs text-slate-500">Enter your storage password above to see your files.</p>
+                </div>
+              ) : displayFiles.length === 0 ? (
+                <div className="rounded-[24px] bg-white px-5 py-10 text-center shadow-sm ring-1 ring-slate-100">
+                  <FolderOpen className="mx-auto h-9 w-9 text-violet-400" />
+                  <p className="mt-3 text-sm font-bold">No files found</p>
+                  <p className="mt-1 text-xs text-slate-500">Upload a file or change your search/filter.</p>
+                </div>
+              ) : viewMode === "list" ? (
+                <div className="space-y-2">{displayFiles.map((file) => <FileRow key={file.id} file={file} />)}</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{displayFiles.map((file) => (
+                  <div key={file.id} className="rounded-[22px] bg-white p-3 shadow-sm ring-1 ring-slate-100">
+                    <div className="flex h-24 items-center justify-center rounded-2xl bg-violet-50"><FileGlyph type={file.type} /></div>
+                    <p className="mt-3 truncate text-xs font-bold">{file.name}</p>
+                    <p className="mt-1 text-[10px] text-slate-500">{file.size}</p>
+                    <button onClick={() => void downloadFile(file.id)} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 text-[11px] font-bold text-white"><ArrowDownToLine className="h-3.5 w-3.5" /> Download</button>
+                  </div>
+                ))}</div>
+              )}
+            </section>
+          )}
+
+          {activeTab === "shared" && (
+            <section className="rounded-[26px] bg-white px-6 py-10 text-center shadow-sm ring-1 ring-slate-100">
+              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-50 text-violet-600"><Users className="h-7 w-7" /></span>
+              <h1 className="mt-4 text-xl font-extrabold">Shared with me</h1>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">Private sharing links are not enabled in this beta yet. Your current files remain private to your selected GitHub repository.</p>
+            </section>
+          )}
+
+          {activeTab === "settings" && (
+            <section className="space-y-4">
+              <div><p className="text-xs font-semibold text-violet-600">PREFERENCES</p><h1 className="mt-1 text-[26px] font-extrabold">Settings</h1></div>
+              <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                <p className="text-sm font-bold">GitHub account</p>
+                <p className="mt-1 text-xs text-slate-500">{githubStatus.user?.login ?? "Not connected"}</p>
+                {githubStatus.connected && <button onClick={() => void disconnectGitHub()} className="mt-4 h-10 rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700">Disconnect GitHub</button>}
+              </div>
+              {githubStatus.connected && (
+                <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                  <p className="text-sm font-bold">Storage repository</p>
+                  <p className="mt-1 text-xs text-slate-500">Choose an existing private repository that the GitDrive App can write to.</p>
+                  {repositories.length > 0 ? (
+                    <div className="mt-3 space-y-3">
+                      <select value={selectedRepo} onChange={(e) => setSelectedRepo(e.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs outline-none">
+                        {repositories.map((repo) => <option key={repo.id} value={repo.fullName}>{repo.fullName}</option>)}
+                      </select>
+                      <button onClick={saveStorageRepo} disabled={!selectedRepo || savingRepo} className="h-11 w-full rounded-xl bg-[#17172a] text-xs font-bold text-white disabled:opacity-50">{savingRepo ? "Saving..." : "Save repository"}</button>
+                    </div>
+                  ) : <a href="https://github.com/settings/installations" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-bold text-violet-600 underline">Manage GitHub App access</a>}
+                </div>
+              )}
+              <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                <div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Encryption</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">Files are encrypted on this device with AES-256-GCM before being uploaded. Your storage password is never sent to GitDrive.</p>
+              </div>
+            </section>
+          )}
+        </main>
+      </div>
+
+      {storageUnlocked && (
+        <button onClick={() => inputRef.current?.click()} disabled={uploading} className="fixed bottom-[92px] right-5 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-[#17172a] px-5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(20,20,40,0.22)] disabled:opacity-50">
+          {uploading ? <CloudUpload className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          {uploading ? "Uploading" : "Add files"}
+        </button>
+      )}
+
+      <input ref={inputRef} type="file" className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ""; }} />
+
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur">
+        <div className="mx-auto grid max-w-lg grid-cols-4">
+          {([
+            ["home", "Home", Home],
+            ["files", "Files", FolderOpen],
+            ["shared", "Shared", Users],
+            ["settings", "Settings", Settings]
+          ] as const).map(([tab, label, Icon]) => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={"flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-bold " + (activeTab === tab ? "text-violet-700" : "text-slate-400")}>
+              <span className={"grid h-7 w-12 place-items-center rounded-full " + (activeTab === tab ? "bg-violet-100" : "")}><Icon className="h-[19px] w-[19px]" /></span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
   );
 }
