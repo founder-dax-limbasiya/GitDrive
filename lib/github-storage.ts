@@ -113,6 +113,8 @@ export async function uploadStorageAsset(
   data: ArrayBuffer | Uint8Array
 ) {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const uploadBody = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(uploadBody).set(bytes);
   const releaseResponse = await getRelease(context, releaseId);
   if (!releaseResponse.ok) throw new Error("Could not verify the GitHub storage release.");
   const release = await releaseResponse.json() as { upload_url?: string };
@@ -129,7 +131,7 @@ export async function uploadStorageAsset(
       "Content-Type": "application/octet-stream",
       "Content-Length": String(bytes.byteLength)
     },
-    body: bytes,
+    body: uploadBody,
     cache: "no-store"
   });
   if (!response.ok) {
