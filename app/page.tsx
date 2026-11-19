@@ -566,8 +566,8 @@ export default function HomePage() {
                   </div>
                 ) : (
                   <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                    <p>No private writable repositories were returned. Create the dedicated private storage repository, then install your GitHub App on it.</p>
-                    <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="https://github.com/new?name=GitDrive-Storage&visibility=private" target="_blank" rel="noreferrer">Create GitDrive-Storage on GitHub</a>
+                    <p>GitDrive App ne haju koi private repository par write access nathi. GitHub ma App installation settings kholi ne tamari existing private repository par Contents read/write access enable karjo.</p>
+                    <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage GitHub App access</a>
                   </div>
                 )}
                 {githubStatus.storageRepo && <p className="mt-3 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Selected: {githubStatus.storageRepo.fullName}</p>}
