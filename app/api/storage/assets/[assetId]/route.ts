@@ -25,6 +25,26 @@ export async function GET(
       return NextResponse.json({ error: "This is not a published GitDrive file release." }, { status: 404 });
     }
 
+    const fileIdMatch = release.tag_name.match(/^gitdrive-file-([0-9a-f-]{36})-v\\d+$/i);
+    if (!fileIdMatch) return NextResponse.json({ error: "Invalid GitDrive file release." }, { status: 404 });
+    const indexResponse = await fetch(
+      `https://api.github.com${context.basePath}/releases/tags/gitdrive-file-${fileIdMatch[1]}-v0`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${context.token}`,
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        cache: "no-store"
+      }
+    );
+    if (!indexResponse.ok) return NextResponse.json({ error: "This file has not been finalized." }, { status: 404 });
+    const indexRelease = await indexResponse.json() as { draft: boolean; body: string | null };
+    const indexMetadata = indexRelease.body ?? "";
+    if (indexRelease.draft || !indexMetadata.includes("status=complete")) {
+      return NextResponse.json({ error: "This file has not been finalized." }, { status: 404 });
+    }
+
     const assets = await listReleaseAssets(context, releaseId);
     const asset = assets.find((item) => String(item.id) === assetId && item.state === "uploaded");
     if (!asset) return NextResponse.json({ error: "File part was not found." }, { status: 404 });
