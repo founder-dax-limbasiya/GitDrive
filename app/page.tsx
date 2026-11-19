@@ -5,7 +5,7 @@ import {
   Archive, ArrowDownToLine, Check, ChevronRight, Cloud, CloudUpload,
   FileImage, FileText, Film, FolderOpen, HardDrive, Home, Image as ImageIcon,
   LayoutGrid, Link2, List, LockKeyhole, LogIn, Plus, Search, Settings,
-  ShieldCheck, SlidersHorizontal, Users, X
+  ShieldCheck, SlidersHorizontal, X
 } from "lucide-react";
 
 type GitHubStatus = {
@@ -50,7 +50,7 @@ type DriveFile = {
   type: "video" | "image" | "document" | "archive";
   size: string;
   modified: string;
-  source: "sample" | "local" | "remote";
+  source: "remote";
 };
 
 
@@ -120,7 +120,6 @@ function FileGlyph({ type }: { type: DriveFile["type"] }) {
 }
 
 export default function HomePage() {
-  const [files] = useState<DriveFile[]>([]);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"home" | "files" | "shared" | "settings">("home");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "image" | "video" | "document" | "archive">("all");
@@ -145,18 +144,18 @@ export default function HomePage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const visibleFiles = useMemo(() => {
-    const source = storageUnlocked
-      ? remoteFiles.map((file) => ({
-          id: file.fileId,
-          name: file.name,
-          type: fileType(file.name),
-          size: formatSize(file.size),
-          modified: file.modified,
-          source: "remote" as const
-        }))
-      : files;
-    return source.filter((file) => file.name.toLowerCase().includes(query.toLowerCase()));
-  }, [files, query, remoteFiles, storageUnlocked]);
+    if (!storageUnlocked) return [];
+    return remoteFiles
+      .map((file) => ({
+        id: file.fileId,
+        name: file.name,
+        type: fileType(file.name),
+        size: formatSize(file.size),
+        modified: file.modified,
+        source: "remote" as const
+      }))
+      .filter((file) => file.name.toLowerCase().includes(query.toLowerCase()));
+  }, [query, remoteFiles, storageUnlocked]);
 
   const displayFiles = useMemo(() => {
     const filtered = visibleFiles.filter((file) =>
@@ -667,8 +666,8 @@ export default function HomePage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium text-violet-100">Your private storage</p>
-                    <p className="mt-2 text-[28px] font-extrabold tracking-tight">{remoteFiles.length} files</p>
-                    <p className="mt-1 text-xs text-violet-100">{storageUnlocked ? formatSize(totalBytes) + " stored" : "Unlock your drive to see your files"}</p>
+                    <p className="mt-2 text-[28px] font-extrabold tracking-tight">{storageUnlocked ? `${remoteFiles.length} files` : "Storage locked"}</p>
+                    <p className="mt-1 text-xs text-violet-100">{storageUnlocked ? formatSize(totalBytes) + " stored" : "Unlock to view your storage"}</p>
                   </div>
                   <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15"><HardDrive className="h-6 w-6" /></span>
                 </div>
@@ -686,19 +685,19 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setFilesCategory("all")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
                     <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-600"><FolderOpen className="h-5 w-5" /></span>
-                    <span><span className="block text-xs font-bold">All files</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.length} items</span></span>
+                    <span><span className="block text-xs font-bold">All files</span><span className="mt-1 block text-[10px] text-slate-400">{storageUnlocked ? `${remoteFiles.length} items` : "Unlock to view"}</span></span>
                   </button>
                   <button onClick={() => setFilesCategory("image")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
                     <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-600"><ImageIcon className="h-5 w-5" /></span>
-                    <span><span className="block text-xs font-bold">Images</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "image").length} items</span></span>
+                    <span><span className="block text-xs font-bold">Images</span><span className="mt-1 block text-[10px] text-slate-400">{storageUnlocked ? `${remoteFiles.filter((f) => fileType(f.name) === "image").length} items` : "Unlock to view"}</span></span>
                   </button>
                   <button onClick={() => setFilesCategory("video")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
                     <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-amber-600"><Film className="h-5 w-5" /></span>
-                    <span><span className="block text-xs font-bold">Videos</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "video").length} items</span></span>
+                    <span><span className="block text-xs font-bold">Videos</span><span className="mt-1 block text-[10px] text-slate-400">{storageUnlocked ? `${remoteFiles.filter((f) => fileType(f.name) === "video").length} items` : "Unlock to view"}</span></span>
                   </button>
                   <button onClick={() => setFilesCategory("document")} className="flex items-center gap-3 rounded-[22px] bg-white p-4 text-left shadow-sm ring-1 ring-slate-100">
                     <span className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-50 text-sky-600"><FileText className="h-5 w-5" /></span>
-                    <span><span className="block text-xs font-bold">Documents</span><span className="mt-1 block text-[10px] text-slate-400">{remoteFiles.filter((f) => fileType(f.name) === "document").length} items</span></span>
+                    <span><span className="block text-xs font-bold">Documents</span><span className="mt-1 block text-[10px] text-slate-400">{storageUnlocked ? `${remoteFiles.filter((f) => fileType(f.name) === "document").length} items` : "Unlock to view"}</span></span>
                   </button>
                 </div>
               </section>
@@ -788,14 +787,6 @@ export default function HomePage() {
             </section>
           )}
 
-          {activeTab === "shared" && (
-            <section className="rounded-[26px] bg-white px-6 py-10 text-center shadow-sm ring-1 ring-slate-100">
-              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-50 text-violet-600"><Users className="h-7 w-7" /></span>
-              <h1 className="mt-4 text-xl font-extrabold">Shared with me</h1>
-              <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">Private sharing links are not enabled in this beta yet. Your current files remain private to your selected GitHub repository.</p>
-            </section>
-          )}
-
           {activeTab === "settings" && (
             <section className="space-y-4">
               <div><p className="text-xs font-semibold text-violet-600">PREFERENCES</p><h1 className="mt-1 text-[26px] font-extrabold">Settings</h1></div>
@@ -837,11 +828,10 @@ export default function HomePage() {
       <input ref={inputRef} type="file" className="hidden" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ""; }} />
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur">
-        <div className="mx-auto grid max-w-lg grid-cols-4">
+        <div className="mx-auto grid max-w-lg grid-cols-3">
           {([
             ["home", "Home", Home],
             ["files", "Files", FolderOpen],
-            ["shared", "Shared", Users],
             ["settings", "Settings", Settings]
           ] as const).map(([tab, label, Icon]) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={"flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-bold " + (activeTab === tab ? "text-violet-700" : "text-slate-400")}>
