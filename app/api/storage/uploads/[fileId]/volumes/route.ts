@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   createStorageRelease,
-  getRelease,
   getStorageContext,
   parseReleaseBody
 } from "@/lib/github-storage";
