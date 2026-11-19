@@ -566,7 +566,7 @@ export default function HomePage() {
                   </div>
                 ) : (
                   <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
-                    <p>GitDrive App ne haju koi private repository par write access nathi. GitHub ma App installation settings kholi ne tamari existing private repository par Contents read/write access enable karjo.</p>
+                    <p>The GitDrive App does not yet have write access to a private repository. Open GitHub App installation settings and grant Contents read/write access to the existing private repository you want to use.</p>
                     <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage GitHub App access</a>
                   </div>
                 )}
