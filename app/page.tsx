@@ -111,6 +111,18 @@ async function decryptBytes(value: ArrayBuffer, key: CryptoKey) {
   return crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
 }
 
+async function readApiJson<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`${fallbackMessage} (server returned HTTP ${response.status}).`);
+  }
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error(fallbackMessage);
+  }
+}
+
 function FileGlyph({ type }: { type: DriveFile["type"] }) {
   const common = "h-5 w-5";
   if (type === "video") return <Film className={common + " text-violet-600"} />;
@@ -121,11 +133,11 @@ function FileGlyph({ type }: { type: DriveFile["type"] }) {
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"home" | "files" | "shared" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "files" | "settings">("home");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "image" | "video" | "document" | "archive">("all");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [sortBy, setSortBy] = useState<"recent" | "name" | "size">("recent");
-  const [notice, setNotice] = useState("Connect GitHub and select a private repository to start using encrypted storage.");
+  const [notice, setNotice] = useState("");
   const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
     appConfigured: false,
     connected: false,
@@ -179,13 +191,13 @@ export default function HomePage() {
     async function loadConnection() {
       try {
         const statusResponse = await fetch("/api/auth/session", { cache: "no-store" });
-        const status = (await statusResponse.json()) as GitHubStatus;
+        const status = await readApiJson<GitHubStatus>(statusResponse, "Could not check your GitHub connection.");
         if (cancelled) return;
         setGithubStatus(status);
 
         if (status.connected) {
           const repoResponse = await fetch("/api/github/repositories", { cache: "no-store" });
-          const repoData = (await repoResponse.json()) as { repositories?: RepoOption[]; error?: string };
+          const repoData = await readApiJson<{ repositories?: RepoOption[]; error?: string }>(repoResponse, "Could not load your GitHub repositories.");
           if (cancelled) return;
           if (repoResponse.ok && repoData.repositories) {
             setRepositories(repoData.repositories);
@@ -246,12 +258,10 @@ export default function HomePage() {
     setLoadingStorage(true);
     try {
       const response = await fetch("/api/storage/files", { cache: "no-store" });
-      const data = await response.json().catch(() => {
-        throw new Error("GitDrive storage API returned an unexpected response. Please refresh the app and try again.");
-      }) as {
+      const data = await readApiJson<{
         files?: Array<Omit<StoredFile, "name" | "size" | "type" | "modified" | "chunkCount" | "chunkSize" | "volumeCount">>;
         error?: string
-      };
+      }>(response, "GitDrive could not read your encrypted files. Refresh the app and try again.");
       if (!response.ok || !data.files) throw new Error(data.error ?? "Could not read GitHub storage.");
 
       const decrypted: StoredFile[] = [];
@@ -315,13 +325,13 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ partCount })
       });
-      const started = await startResponse.json() as {
+      const started = await readApiJson<{
         fileId?: string;
         salt?: string;
         releaseId?: number;
         volumeCount?: number;
         error?: string
-      };
+      }>(startResponse, "Could not start the encrypted upload.");
       if (!startResponse.ok || !started.fileId || !started.salt || !started.releaseId) {
         throw new Error(started.error ?? "Could not start the encrypted upload.");
       }
@@ -338,7 +348,7 @@ export default function HomePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ index: volumeIndex })
           });
-          const volumeData = await volumeResponse.json() as { releaseId?: number; error?: string };
+          const volumeData = await readApiJson<{ releaseId?: number; error?: string }>(volumeResponse, "Could not create the next storage volume.");
           if (!volumeResponse.ok || !volumeData.releaseId) {
             throw new Error(volumeData.error ?? "Could not create the next storage volume.");
           }
@@ -361,7 +371,7 @@ export default function HomePage() {
               headers: { "Content-Type": "application/octet-stream" },
               body: encrypted
             });
-            const uploadData = await uploadResponse.json() as { error?: string };
+            const uploadData = await readApiJson<{ error?: string }>(uploadResponse, "GitHub rejected this encrypted file part.");
             if (!uploadResponse.ok) throw new Error(uploadData.error ?? "GitHub rejected this file part.");
             uploaded = true;
           } catch (error) {
@@ -394,7 +404,7 @@ export default function HomePage() {
           body: manifestBytes
         }
       );
-      const manifestResult = await manifestResponse.json() as { error?: string };
+      const manifestResult = await readApiJson<{ error?: string }>(manifestResponse, "Could not save the encrypted file manifest.");
       if (!manifestResponse.ok) throw new Error(manifestResult.error ?? "Could not save the encrypted file manifest.");
       setUploadProgress(96);
 
@@ -403,7 +413,7 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ releaseIds })
       });
-      const completeResult = await completeResponse.json() as { error?: string };
+      const completeResult = await readApiJson<{ error?: string }>(completeResponse, "Could not finish the encrypted upload.");
       if (!completeResponse.ok) throw new Error(completeResult.error ?? "Could not finish the upload.");
 
       setUploadProgress(100);
@@ -471,13 +481,16 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fullName: selectedRepo })
       });
-      const data = await response.json() as { storageRepo?: GitHubStatus["storageRepo"]; error?: string };
+      const data = await readApiJson<{ storageRepo?: GitHubStatus["storageRepo"]; error?: string }>(response, "Could not select this storage repository.");
       if (!response.ok || !data.storageRepo) {
         setNotice(data.error ?? "Could not select this storage repository.");
         return;
       }
       setGithubStatus((current) => ({ ...current, storageRepo: data.storageRepo ?? null }));
-      setNotice("Private storage repository linked: " + data.storageRepo.fullName + ". Unlock encrypted storage to start uploading.");
+      setStorageUnlocked(false);
+      setRemoteFiles([]);
+      setEncryptionPassword("");
+      setNotice("Private storage repository linked: " + data.storageRepo.fullName + ". Unlock it to view files.");
     } catch {
       setNotice("Could not save the storage repository. Please try again.");
     } finally {
@@ -491,6 +504,9 @@ export default function HomePage() {
       setGithubStatus((current) => ({ ...current, connected: false, user: null, storageRepo: null }));
       setRepositories([]);
       setSelectedRepo("");
+      setStorageUnlocked(false);
+      setRemoteFiles([]);
+      setEncryptionPassword("");
       setNotice("GitHub has been disconnected from this browser session.");
     } catch {
       setNotice("Could not disconnect GitHub. Please try again.");
@@ -657,7 +673,7 @@ export default function HomePage() {
               <section className="mb-5">
                 <p className="text-xs font-semibold text-violet-600">YOUR PERSONAL DRIVE</p>
                 <h1 className="mt-1 text-[26px] font-extrabold leading-tight tracking-tight">
-                  Hello{githubStatus.user?.name ? ", " + githubStatus.user.name.split(" ")[0] : ""}
+                  {githubStatus.user?.name ? "Hello, " + githubStatus.user.name.split(" ")[0] : "Your drive"}
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">Everything you save, neatly together.</p>
               </section>
@@ -769,8 +785,8 @@ export default function HomePage() {
               ) : displayFiles.length === 0 ? (
                 <div className="rounded-[24px] bg-white px-5 py-10 text-center shadow-sm ring-1 ring-slate-100">
                   <FolderOpen className="mx-auto h-9 w-9 text-violet-400" />
-                  <p className="mt-3 text-sm font-bold">No files found</p>
-                  <p className="mt-1 text-xs text-slate-500">Upload a file or change your search/filter.</p>
+                  <p className="mt-3 text-sm font-bold">{query || categoryFilter !== "all" ? "No files match your filters" : "No files yet"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{query || categoryFilter !== "all" ? "Try another search or category." : "Your private drive is empty. Add a file to get started."}</p>
                 </div>
               ) : viewMode === "list" ? (
                 <div className="space-y-2">{displayFiles.map((file) => <FileRow key={file.id} file={file} />)}</div>
