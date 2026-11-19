@@ -113,9 +113,11 @@ export async function uploadStorageAsset(
   data: ArrayBuffer | Uint8Array
 ) {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const uploadUrl = new URL(
-    `https://uploads.github.com/repos/${encodeURIComponent(context.owner)}/${encodeURIComponent(context.repo)}/releases/${releaseId}/assets`
-  );
+  const releaseResponse = await getRelease(context, releaseId);
+  if (!releaseResponse.ok) throw new Error("Could not verify the GitHub storage release.");
+  const release = await releaseResponse.json() as { upload_url?: string };
+  if (!release.upload_url) throw new Error("GitHub did not provide a release asset upload URL.");
+  const uploadUrl = new URL(release.upload_url.replace(/\\{[^}]+\\}$/, ""));
   uploadUrl.searchParams.set("name", name);
 
   const response = await fetch(uploadUrl, {
