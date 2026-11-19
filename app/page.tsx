@@ -81,12 +81,6 @@ function fromBase64(value: string) {
   return bytes;
 }
 
-function toBase64(value: Uint8Array) {
-  let binary = "";
-  for (let i = 0; i < value.length; i += 1) binary += String.fromCharCode(value[i]);
-  return btoa(binary);
-}
-
 async function deriveFileKey(password: string, saltBase64: string) {
   const material = await crypto.subtle.importKey(
     "raw",
@@ -130,7 +124,7 @@ function FileGlyph({ type }: { type: DriveFile["type"] }) {
 }
 
 export default function HomePage() {
-  const [files, setFiles] = useState(initialFiles);
+  const [files] = useState(initialFiles);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("GitHub connection is not configured yet. Your files stay on this device in this preview.");
   const [selected, setSelected] = useState<string | null>(null);
