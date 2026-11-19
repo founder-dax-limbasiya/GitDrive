@@ -109,7 +109,7 @@ async function encryptBytes(value: ArrayBuffer, key: CryptoKey) {
 
 async function decryptBytes(value: ArrayBuffer, key: CryptoKey) {
   const input = new Uint8Array(value);
-  if (input.length < 29) throw new Error("Encrypted data is incomplete.");
+  if (input.length < 28) throw new Error("Encrypted data is incomplete.");
   const iv = input.slice(0, 12);
   const encrypted = input.slice(12);
   return crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
@@ -126,7 +126,7 @@ function FileGlyph({ type }: { type: DriveFile["type"] }) {
 export default function HomePage() {
   const [files] = useState(initialFiles);
   const [query, setQuery] = useState("");
-  const [notice, setNotice] = useState("GitHub connection is not configured yet. Your files stay on this device in this preview.");
+  const [notice, setNotice] = useState("Connect GitHub and select a private repository to start using encrypted storage.");
   const [selected, setSelected] = useState<string | null>(null);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus>({
     appConfigured: false,
@@ -461,7 +461,7 @@ export default function HomePage() {
         return;
       }
       setGithubStatus((current) => ({ ...current, storageRepo: data.storageRepo ?? null }));
-      setNotice("Private storage repository linked: " + data.storageRepo.fullName + ". File upload is the next build step.");
+      setNotice("Private storage repository linked: " + data.storageRepo.fullName + ". Unlock encrypted storage to start uploading.");
     } catch {
       setNotice("Could not save the storage repository. Please try again.");
     } finally {
@@ -497,7 +497,7 @@ export default function HomePage() {
           </nav>
           <div className="mt-auto rounded-2xl border border-line bg-slate-50 p-4">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Privacy first</div>
-            <p className="text-xs leading-5 text-muted">Client-side encryption is planned before any file leaves your device.</p>
+            <p className="text-xs leading-5 text-muted">Files are encrypted in your browser before they leave this device.</p>
             <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full w-[8%] rounded-full bg-brand" /></div>
             <p className="mt-2 text-[11px] text-muted">Setup progress · 1 of 5</p>
           </div>
@@ -537,13 +537,13 @@ export default function HomePage() {
 
             <div className="mb-6 grid gap-4 md:grid-cols-[1.4fr_1fr]">
               <div className="rounded-2xl bg-gradient-to-br from-[#292a72] via-[#4546b9] to-[#7778f2] p-6 text-white shadow-soft md:p-7">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-indigo-100">Storage overview</p><p className="mt-3 text-3xl font-bold tracking-tight">Ready for your files</p><p className="mt-2 max-w-sm text-sm leading-6 text-indigo-100">Connect GitHub to set up your private storage space. No storage quota is being claimed in this preview.</p></div><span className="rounded-2xl bg-white/15 p-3"><HardDrive className="h-6 w-6" /></span></div>
+                <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-indigo-100">Storage overview</p><p className="mt-3 text-3xl font-bold tracking-tight">Ready for your files</p><p className="mt-2 max-w-sm text-sm leading-6 text-indigo-100">Your selected private repository stores encrypted file chunks. GitHub storage and bandwidth limits still apply.</p></div><span className="rounded-2xl bg-white/15 p-3"><HardDrive className="h-6 w-6" /></span></div>
                 <div className="mt-7 flex items-center justify-between border-t border-white/20 pt-4 text-xs text-indigo-100"><span>GitHub storage</span><span>{githubStatus.storageRepo?.fullName ?? (githubStatus.connected ? "Choose a private repo" : "Not connected")}</span></div>
               </div>
               <div className="rounded-2xl border border-line bg-white p-6 shadow-soft">
                 <div className="flex items-center justify-between"><span className="text-sm font-semibold text-ink">Security status</span><LockKeyhole className="h-5 w-5 text-emerald-600" /></div>
-                <p className="mt-5 text-2xl font-bold tracking-tight">Setup pending</p>
-                <p className="mt-2 text-sm leading-6 text-muted">Encryption and recovery-key setup will be required before remote uploads are enabled.</p>
+                <p className="mt-5 text-2xl font-bold tracking-tight">AES-256-GCM enabled</p>
+                <p className="mt-2 text-sm leading-6 text-muted">Files are encrypted in your browser before upload. Your password is never sent to GitDrive.</p>
                 <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> Security-first setup</div>
               </div>
             </div>
