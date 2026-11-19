@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Archive, Check, ChevronDown, Cloud, FileImage,
+  Archive, ArrowDownToLine, Check, ChevronDown, Cloud, FileImage,
   FileText, Film, Folder, HardDrive, Home, Link2, LockKeyhole, MoreHorizontal,
   Plus, Search, Settings2, ShieldCheck, Upload, X
 } from "lucide-react";
