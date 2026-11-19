@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   getRelease,
@@ -28,7 +29,13 @@ export async function PUT(
 
     const releaseResponse = await getRelease(context, releaseId);
     if (!releaseResponse.ok) return NextResponse.json({ error: "Storage release was not found." }, { status: 404 });
-    const release = await releaseResponse.json() as { id: number; tag_name: string; draft: boolean; body: string | null };
+    const release = await releaseResponse.json() as {
+      id: number;
+      tag_name: string;
+      draft: boolean;
+      body: string | null;
+      assets?: Array<{ id: number; name: string; size: number; state: string; digest?: string | null }>;
+    };
     const metadata = parseReleaseBody(release.body);
     if (
       !release.draft ||
@@ -43,6 +50,22 @@ export async function PUT(
     const maxBytes = isManifest ? 1024 * 1024 : GITDRIVE_CHUNK_BYTES + 64;
     if (data.byteLength < 1 || data.byteLength > maxBytes) {
       return NextResponse.json({ error: "Upload part is larger than the allowed chunk size." }, { status: 413 });
+    }
+
+    const existing = release.assets?.find((asset) => asset.name === name && asset.state === "uploaded");
+    if (existing) {
+      const incomingDigest = "sha256:" + createHash("sha256").update(Buffer.from(data)).digest("hex");
+      if (
+        existing.size === data.byteLength &&
+        (!existing.digest || existing.digest === incomingDigest)
+      ) {
+        return NextResponse.json({
+          ok: true,
+          reused: true,
+          asset: { id: existing.id, name: existing.name, size: existing.size }
+        });
+      }
+      return NextResponse.json({ error: "A different asset already exists with this part name." }, { status: 409 });
     }
 
     const asset = await uploadStorageAsset(context, releaseId, name, data);
