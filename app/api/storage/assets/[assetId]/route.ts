@@ -25,7 +25,7 @@ export async function GET(
       return NextResponse.json({ error: "This is not a published GitDrive file release." }, { status: 404 });
     }
 
-    const fileIdMatch = release.tag_name.match(/^gitdrive-file-([0-9a-f-]{36})-v\\d+$/i);
+    const fileIdMatch = release.tag_name.match(/^gitdrive-file-([0-9a-f-]{36})-v\d+$/i);
     if (!fileIdMatch) return NextResponse.json({ error: "Invalid GitDrive file release." }, { status: 404 });
     const indexResponse = await fetch(
       `https://api.github.com${context.basePath}/releases/tags/gitdrive-file-${fileIdMatch[1]}-v0`,
