@@ -153,6 +153,7 @@ export default function HomePage() {
   const [loadingStorage, setLoadingStorage] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [testingStorage, setTestingStorage] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const visibleFiles = useMemo(() => {
@@ -469,6 +470,162 @@ export default function HomePage() {
       setNotice(`Download ready: ${file.name}`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not decrypt this file. Check your storage password.");
+    }
+  }
+
+  async function runStorageSelfTest() {
+    if (!githubStatus.storageRepo || !storageUnlocked || encryptionPassword.length < 10) {
+      setNotice("Connect GitHub, select a private repository and unlock storage before running the test.");
+      return;
+    }
+    if (testingStorage || uploading) return;
+
+    setTestingStorage(true);
+    setNotice("Running a temporary encrypted storage test...");
+    let cleanupTarget: { fileId: string; releaseId: number } | null = null;
+    let failure = "";
+    let cleanupFailure = "";
+
+    try {
+      const createResponse = await fetch("/api/storage/diagnostics", {
+        method: "POST",
+        cache: "no-store"
+      });
+      const created = await readApiJson<{ fileId?: string; salt?: string; releaseId?: number; error?: string }>(
+        createResponse,
+        "Could not prepare the temporary storage test."
+      );
+      if (!createResponse.ok || !created.fileId || !created.salt || !created.releaseId) {
+        throw new Error(created.error ?? "Could not prepare the temporary storage test.");
+      }
+      cleanupTarget = { fileId: created.fileId, releaseId: created.releaseId };
+
+      const key = await deriveFileKey(encryptionPassword, created.salt);
+      const testText = `GitDrive encrypted storage self-test\\n${created.fileId}\\n${new Date().toISOString()}`;
+      const testBytes = new TextEncoder().encode(testText);
+      const testBuffer = testBytes.buffer.slice(
+        testBytes.byteOffset,
+        testBytes.byteOffset + testBytes.byteLength
+      ) as ArrayBuffer;
+
+      const encryptedChunk = await encryptBytes(testBuffer, key);
+      const chunkResponse = await fetch(
+        `/api/storage/uploads/${created.releaseId}/assets?name=chunk-000000.gd`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: encryptedChunk
+        }
+      );
+      const chunkResult = await readApiJson<{ asset?: { id: number }; error?: string }>(
+        chunkResponse,
+        "Could not upload the encrypted test chunk."
+      );
+      if (!chunkResponse.ok || !chunkResult.asset?.id) {
+        throw new Error(chunkResult.error ?? "Could not upload the encrypted test chunk.");
+      }
+
+      const manifest = {
+        version: 1,
+        name: "__gitdrive_diagnostic_test__.txt",
+        size: testBytes.byteLength,
+        type: "text/plain",
+        modified: new Date().toISOString(),
+        chunkSize: 4 * 1024 * 1024,
+        chunkCount: 1,
+        volumeCount: 1
+      };
+      const manifestText = new TextEncoder().encode(JSON.stringify(manifest));
+      const manifestBuffer = manifestText.buffer.slice(
+        manifestText.byteOffset,
+        manifestText.byteOffset + manifestText.byteLength
+      ) as ArrayBuffer;
+      const encryptedManifest = await encryptBytes(manifestBuffer, key);
+
+      const manifestResponse = await fetch(
+        `/api/storage/uploads/${created.releaseId}/assets?name=manifest.gd`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: encryptedManifest
+        }
+      );
+      const manifestResult = await readApiJson<{ error?: string }>(
+        manifestResponse,
+        "Could not upload the encrypted test manifest."
+      );
+      if (!manifestResponse.ok) {
+        throw new Error(manifestResult.error ?? "Could not upload the encrypted test manifest.");
+      }
+
+      const completeResponse = await fetch(`/api/storage/uploads/${created.fileId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ releaseIds: [created.releaseId] })
+      });
+      const completeResult = await readApiJson<{ error?: string }>(
+        completeResponse,
+        "Could not finalize the temporary test file."
+      );
+      if (!completeResponse.ok) {
+        throw new Error(completeResult.error ?? "Could not finalize the temporary test file.");
+      }
+
+      const downloadResponse = await fetch(
+        `/api/storage/assets/${chunkResult.asset.id}?releaseId=${created.releaseId}`,
+        { cache: "no-store" }
+      );
+      if (!downloadResponse.ok) {
+        throw new Error("The test asset uploaded, but the authenticated download proxy failed.");
+      }
+      const decrypted = new Uint8Array(await decryptBytes(await downloadResponse.arrayBuffer(), key));
+      const matches = decrypted.length === testBytes.length &&
+        decrypted.every((value, index) => value === testBytes[index]);
+      if (!matches) {
+        throw new Error("The downloaded bytes did not match the original test file.");
+      }
+
+      const listResponse = await fetch("/api/storage/files", { cache: "no-store" });
+      const listResult = await readApiJson<{ files?: Array<{ fileId: string }>; error?: string }>(
+        listResponse,
+        "The storage test passed, but the file library could not be checked."
+      );
+      if (!listResponse.ok || !listResult.files) {
+        throw new Error(listResult.error ?? "Could not verify the file library.");
+      }
+      if (listResult.files.some((file) => file.fileId === created.fileId)) {
+        throw new Error("The temporary diagnostic file appeared in your normal file library.");
+      }
+    } catch (error) {
+      failure = error instanceof Error ? error.message : "The storage self-test failed.";
+    } finally {
+      if (cleanupTarget) {
+        try {
+          const cleanupResponse = await fetch("/api/storage/diagnostics", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cleanupTarget),
+            cache: "no-store"
+          });
+          const cleanupResult = await readApiJson<{ error?: string }>(
+            cleanupResponse,
+            "Could not remove the temporary test release."
+          );
+          if (!cleanupResponse.ok) {
+            cleanupFailure = cleanupResult.error ?? "Could not remove the temporary test release.";
+          }
+        } catch (error) {
+          cleanupFailure = error instanceof Error ? error.message : "Could not remove the temporary test release.";
+        }
+      }
+      setTestingStorage(false);
+      if (failure) {
+        setNotice(cleanupFailure ? `${failure} Cleanup also needs attention: ${cleanupFailure}` : failure);
+      } else if (cleanupFailure) {
+        setNotice(`Storage upload/download verification passed, but temporary test cleanup needs attention: ${cleanupFailure}`);
+      } else {
+        setNotice("Storage self-test passed: encrypted upload, GitHub asset download, decryption, byte-for-byte verification and cleanup all succeeded.");
+      }
     }
   }
 
@@ -825,6 +982,20 @@ export default function HomePage() {
                   ) : <a href="https://github.com/settings/installations" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-bold text-violet-600 underline">Manage GitHub App access</a>}
                 </div>
               )}
+              {githubStatus.connected && githubStatus.storageRepo && (
+                <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                  <div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4 text-violet-600" /> Storage connection test</div>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">Creates one temporary encrypted test file in your selected private repository, downloads and verifies it, then removes the test release and tag.</p>
+                  <button
+                    onClick={() => void runStorageSelfTest()}
+                    disabled={!storageUnlocked || testingStorage || uploading}
+                    className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#17172a] text-xs font-bold text-white disabled:opacity-40"
+                  >
+                    {testingStorage ? "Testing storage..." : "Run storage self-test"}
+                  </button>
+                  {!storageUnlocked && <p className="mt-2 text-[10px] text-slate-400">Unlock storage first to run the test.</p>}
+                </div>
+              )}
               <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-100">
                 <div className="flex items-center gap-2 text-sm font-bold"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Encryption</div>
                 <p className="mt-2 text-xs leading-5 text-slate-500">Files are encrypted on this device with AES-256-GCM before being uploaded. Your storage password is never sent to GitDrive.</p>
@@ -835,7 +1006,7 @@ export default function HomePage() {
       </div>
 
       {storageUnlocked && (
-        <button onClick={() => inputRef.current?.click()} disabled={uploading} className="fixed bottom-[92px] right-5 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-[#17172a] px-5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(20,20,40,0.22)] disabled:opacity-50">
+        <button onClick={() => inputRef.current?.click()} disabled={uploading || testingStorage} className="fixed bottom-[92px] right-5 z-40 inline-flex h-14 items-center gap-3 rounded-full bg-[#17172a] px-5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(20,20,40,0.22)] disabled:opacity-50">
           {uploading ? <CloudUpload className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
           {uploading ? "Uploading" : "Add files"}
         </button>
