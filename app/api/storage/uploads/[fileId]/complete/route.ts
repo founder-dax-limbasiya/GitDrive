@@ -111,7 +111,8 @@ export async function POST(
           volume: 0,
           partCount,
           salt: firstMetadata.salt,
-          status: "complete"
+          status: "complete",
+          ...(firstMetadata.purpose === "diagnostic" ? { purpose: "diagnostic" as const } : {})
         })
       }),
       cache: "no-store"
