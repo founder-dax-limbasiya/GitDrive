@@ -72,37 +72,37 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Invalid diagnostic cleanup request." }, { status: 400 });
     }
 
-    const releaseResponse = await getRelease(context, releaseId);
-    if (releaseResponse.status === 404) {
-      return NextResponse.json({ ok: true, alreadyRemoved: true });
-    }
-    if (!releaseResponse.ok) {
-      return NextResponse.json({ error: "Could not verify the temporary test release." }, { status: releaseResponse.status });
-    }
-
-    const release = await releaseResponse.json() as {
-      id: number;
-      tag_name: string;
-      body: string | null;
-    };
-    const metadata = parseReleaseBody(release.body);
     const expectedTag = `gitdrive-file-${fileId}-v0`;
-    if (
-      release.id !== releaseId ||
-      release.tag_name !== expectedTag ||
-      metadata.gitdrive !== "1" ||
-      metadata.file_id !== fileId ||
-      metadata.volume !== "0" ||
-      metadata.purpose !== "diagnostic"
-    ) {
-      return NextResponse.json({ error: "Cleanup can only remove the temporary GitDrive diagnostic release." }, { status: 409 });
+    const releaseResponse = await getRelease(context, releaseId);
+    if (releaseResponse.status !== 404) {
+      if (!releaseResponse.ok) {
+        return NextResponse.json({ error: "Could not verify the temporary test release." }, { status: releaseResponse.status });
+      }
+
+      const release = await releaseResponse.json() as {
+        id: number;
+        tag_name: string;
+        body: string | null;
+      };
+      const metadata = parseReleaseBody(release.body);
+      if (
+        release.id !== releaseId ||
+        release.tag_name !== expectedTag ||
+        metadata.gitdrive !== "1" ||
+        metadata.file_id !== fileId ||
+        metadata.volume !== "0" ||
+        metadata.purpose !== "diagnostic"
+      ) {
+        return NextResponse.json({ error: "Cleanup can only remove the temporary GitDrive diagnostic release." }, { status: 409 });
+      }
+
+      const deleted = await githubApiFetch(`${context.basePath}/releases/${releaseId}`, context.token, { method: "DELETE" });
+      if (!deleted.ok && deleted.status !== 404) {
+        return NextResponse.json({ error: "The test passed, but GitHub could not remove the temporary release." }, { status: 502 });
+      }
     }
 
-    const deleted = await githubApiFetch(`${context.basePath}/releases/${releaseId}`, context.token, { method: "DELETE" });
-    if (!deleted.ok && deleted.status !== 404) {
-      return NextResponse.json({ error: "The test passed, but GitHub could not remove the temporary release." }, { status: 502 });
-    }
-
+    // Even when the release was removed by a previous attempt, retry tag cleanup.
     const tag = encodeURIComponent(expectedTag);
     const tagDeleted = await githubApiFetch(`${context.basePath}/git/refs/tags/${tag}`, context.token, { method: "DELETE" });
     if (!tagDeleted.ok && tagDeleted.status !== 404) {
