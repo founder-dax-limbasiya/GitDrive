@@ -42,6 +42,7 @@ export function buildReleaseBody(input: {
   partCount: number;
   salt: string;
   status: "pending" | "complete";
+  purpose?: "diagnostic";
 }) {
   return [
     "gitdrive=1",
@@ -49,6 +50,7 @@ export function buildReleaseBody(input: {
     `volume=${input.volume}`,
     `part_count=${input.partCount}`,
     `salt=${input.salt}`,
+    ...(input.purpose ? [`purpose=${input.purpose}`] : []),
     `status=${input.status}`
   ].join("\n");
 }
@@ -74,14 +76,14 @@ export async function listReleaseAssets(context: StorageContext, releaseId: numb
 
 export async function createStorageRelease(
   context: StorageContext,
-  input: { fileId: string; volume: number; partCount: number; salt: string }
+  input: { fileId: string; volume: number; partCount: number; salt: string; purpose?: "diagnostic" }
 ) {
   const tagName = `gitdrive-file-${input.fileId}-v${input.volume}`;
   const existing = await githubApiFetch(`${context.basePath}/releases/tags/${tagName}`, context.token);
   if (existing.ok) {
     const release = await existing.json() as { id: number; draft: boolean; body: string | null; tag_name: string };
     const values = parseReleaseBody(release.body);
-    if (release.draft && values.gitdrive === "1" && values.file_id === input.fileId && Number(values.volume) === input.volume) {
+    if (release.draft && values.gitdrive === "1" && values.file_id === input.fileId && Number(values.volume) === input.volume && values.purpose === input.purpose) {
       return release;
     }
     throw new Error("A release with this GitDrive file identifier already exists.");
