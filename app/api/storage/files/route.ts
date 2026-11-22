@@ -36,7 +36,7 @@ export async function GET() {
     const valid = allReleases.filter((release) => {
       if (release.draft || !isGitDriveRelease(release)) return false;
       const values = parseReleaseBody(release.body);
-      return values.status === "complete" && values.volume === "0" && Boolean(values.salt) && /^[0-9a-f-]{36}$/i.test(values.file_id ?? "");
+      return values.status === "complete" && values.volume === "0" && values.purpose !== "diagnostic" && Boolean(values.salt) && /^[0-9a-f-]{36}$/i.test(values.file_id ?? "");
     });
 
     const files = [];
